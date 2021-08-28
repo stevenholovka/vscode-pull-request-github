@@ -6,13 +6,13 @@
 export enum PRType {
 	Query,
 	All,
-	LocalPullRequest,
+	LocalPullRequest
 }
 
 export enum ReviewEvent {
 	Approve = 'APPROVE',
 	RequestChanges = 'REQUEST_CHANGES',
-	Comment = 'COMMENT',
+	Comment = 'COMMENT'
 }
 
 export enum GithubItemStateEnum {
@@ -24,7 +24,7 @@ export enum GithubItemStateEnum {
 export enum PullRequestMergeability {
 	Mergeable,
 	NotMergeable,
-	Unknown,
+	Unknown
 }
 
 export interface ReviewState {
@@ -37,7 +37,6 @@ export interface IAccount {
 	name?: string;
 	avatarUrl?: string;
 	url: string;
-	email?: string;
 }
 
 export interface ISuggestedReviewer extends IAccount {
@@ -48,8 +47,6 @@ export interface ISuggestedReviewer extends IAccount {
 export interface IMilestone {
 	title: string;
 	dueOn?: string | null;
-	createdAt: string;
-	id: string;
 }
 
 export interface MergePullRequest {
@@ -72,7 +69,6 @@ export interface IGitHubRef {
 
 export interface ILabel {
 	name: string;
-	color: string;
 }
 
 export interface Issue {
@@ -84,27 +80,17 @@ export interface Issue {
 	body: string;
 	bodyHTML?: string;
 	title: string;
-	assignees?: IAccount[];
+	assignee?: IAccount;
 	createdAt: string;
 	updatedAt: string;
 	user: IAccount;
 	labels: ILabel[];
 	milestone?: IMilestone;
-	repositoryOwner?: string;
-	repositoryName?: string;
-	repositoryUrl?: string;
-	comments?: {
-		author: IAccount;
-		body: string;
-		databaseId: number;
-	}[];
 }
 
 export interface PullRequest extends Issue {
 	isDraft?: boolean;
-	isRemoteHeadDeleted?: boolean;
 	head?: IGitHubRef;
-	isRemoteBaseDeleted?: boolean;
 	base?: IGitHubRef;
 	merged?: boolean;
 	mergeable?: PullRequestMergeability;
@@ -140,7 +126,7 @@ export type MergeMethodsAvailability = {
 
 export type RepoAccessAndMergeMethods = {
 	hasWritePermission: boolean;
-	mergeMethodsAvailability: MergeMethodsAvailability;
+	mergeMethodsAvailability: MergeMethodsAvailability
 };
 
 export interface User extends IAccount {
@@ -150,18 +136,5 @@ export interface User extends IAccount {
 	commitContributions: {
 		createdAt: Date;
 		repoNameWithOwner: string;
-	}[];
-}
-
-export interface PullRequestChecks {
-	state: string;
-	statuses: {
-		id: string;
-		url?: string;
-		avatar_url?: string;
-		state?: string;
-		description?: string;
-		target_url?: string;
-		context: string;
 	}[];
 }

@@ -4,24 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { IComment } from '../common/comment';
-import Logger from '../common/logger';
 import { Remote } from '../common/remote';
-import { TimelineEvent } from '../common/timelineEvent';
-import { formatError } from '../common/utils';
-import { OctokitCommon } from './common';
 import { GitHubRepository } from './githubRepository';
-import {
-	AddIssueCommentResponse,
-	EditIssueCommentResponse,
-	TimelineEventsResponse,
-	UpdatePullRequestResponse,
-} from './graphql';
-import { GithubItemStateEnum, IAccount, IMilestone, IPullRequestEditData, Issue } from './interface';
-import { parseGraphQlIssueComment, parseGraphQLTimelineEvents } from './utils';
+import { IAccount, Issue, GithubItemStateEnum, IMilestone } from './interface';
 
-export class IssueModel<TItem extends Issue = Issue> {
-	static ID = 'IssueModel';
+export class IssueModel {
 	public id: number;
 	public graphNodeId: string;
 	public number: number;
@@ -29,23 +16,20 @@ export class IssueModel<TItem extends Issue = Issue> {
 	public html_url: string;
 	public state: GithubItemStateEnum = GithubItemStateEnum.Open;
 	public author: IAccount;
-	public assignees?: IAccount[];
+	public assignee: IAccount;
 	public createdAt: string;
 	public updatedAt: string;
 	public milestone?: IMilestone;
 	public readonly githubRepository: GitHubRepository;
 	public readonly remote: Remote;
-	public item: TItem;
+	public item: Issue;
 	public bodyHTML?: string;
 
-	constructor(githubRepository: GitHubRepository, remote: Remote, item: TItem, skipUpdate: boolean = false) {
+	constructor(githubRepository: GitHubRepository, remote: Remote, item: Issue) {
 		this.githubRepository = githubRepository;
 		this.remote = remote;
 		this.item = item;
-
-		if (!skipUpdate) {
-			this.update(item);
-		}
+		this.update(item);
 	}
 
 	public get isOpen(): boolean {
@@ -68,7 +52,7 @@ export class IssueModel<TItem extends Issue = Issue> {
 
 				// hack, to ensure queries are not wrongly encoded.
 				const originalToStringFn = uri.toString;
-				uri.toString = function (_skipEncoding?: boolean | undefined) {
+				uri.toString = function (skipEncoding?: boolean | undefined) {
 					return originalToStringFn.call(uri, true);
 				};
 
@@ -94,7 +78,7 @@ export class IssueModel<TItem extends Issue = Issue> {
 		}
 	}
 
-	update(issue: TItem): void {
+	update(issue: Issue): void {
 		this.id = issue.id;
 		this.graphNodeId = issue.graphNodeId;
 		this.number = issue.number;
@@ -104,18 +88,15 @@ export class IssueModel<TItem extends Issue = Issue> {
 		this.author = issue.user;
 		this.milestone = issue.milestone;
 		this.createdAt = issue.createdAt;
-		this.updatedAt = issue.updatedAt;
 
 		this.updateState(issue.state);
 
-		if (issue.assignees) {
-			this.assignees = issue.assignees;
+		if (issue.assignee) {
+			this.assignee = issue.assignee;
 		}
-
-		this.item = issue;
 	}
 
-	equals(other: IssueModel<TItem> | undefined): boolean {
+	equals(other: IssueModel | undefined): boolean {
 		if (!other) {
 			return false;
 		}
@@ -130,140 +111,4 @@ export class IssueModel<TItem extends Issue = Issue> {
 
 		return true;
 	}
-
-	async edit(toEdit: IPullRequestEditData): Promise<{ body: string; bodyHTML: string; title: string }> {
-		try {
-			const { mutate, schema } = await this.githubRepository.ensure();
-
-			const { data } = await mutate<UpdatePullRequestResponse>({
-				mutation: schema.UpdatePullRequest,
-				variables: {
-					input: {
-						pullRequestId: this.graphNodeId,
-						body: toEdit.body,
-						title: toEdit.title,
-					},
-				},
-			});
-
-			return data!.updatePullRequest.pullRequest;
-		} catch (e) {
-			throw new Error(formatError(e));
-		}
-	}
-
-	canEdit(): boolean {
-		const username = this.author && this.author.login;
-		return this.githubRepository.isCurrentUser(username);
-	}
-
-	async getIssueComments(): Promise<OctokitCommon.IssuesListCommentsResponseData> {
-		Logger.debug(`Fetch issue comments of PR #${this.number} - enter`, IssueModel.ID);
-		const { octokit, remote } = await this.githubRepository.ensure();
-
-		const promise = await octokit.issues.listComments({
-			owner: remote.owner,
-			repo: remote.repositoryName,
-			issue_number: this.number,
-			per_page: 100,
-		});
-		Logger.debug(`Fetch issue comments of PR #${this.number} - done`, IssueModel.ID);
-
-		return promise.data;
-	}
-
-	async createIssueComment(text: string): Promise<IComment> {
-		const { mutate, schema } = await this.githubRepository.ensure();
-		const { data } = await mutate<AddIssueCommentResponse>({
-			mutation: schema.AddIssueComment,
-			variables: {
-				input: {
-					subjectId: this.graphNodeId,
-					body: text,
-				},
-			},
-		});
-
-		return parseGraphQlIssueComment(data!.addComment.commentEdge.node);
-	}
-
-	async editIssueComment(comment: IComment, text: string): Promise<IComment> {
-		try {
-			const { mutate, schema } = await this.githubRepository.ensure();
-
-			const { data } = await mutate<EditIssueCommentResponse>({
-				mutation: schema.EditIssueComment,
-				variables: {
-					input: {
-						id: comment.graphNodeId,
-						body: text,
-					},
-				},
-			});
-
-			return parseGraphQlIssueComment(data!.updateIssueComment.issueComment);
-		} catch (e) {
-			throw new Error(formatError(e));
-		}
-	}
-
-	async deleteIssueComment(commentId: string): Promise<void> {
-		try {
-			const { octokit, remote } = await this.githubRepository.ensure();
-
-			await octokit.issues.deleteComment({
-				owner: remote.owner,
-				repo: remote.repositoryName,
-				comment_id: Number(commentId),
-			});
-		} catch (e) {
-			throw new Error(formatError(e));
-		}
-	}
-
-	async addLabels(labels: string[]): Promise<void> {
-		const { octokit, remote } = await this.githubRepository.ensure();
-		await octokit.issues.addLabels({
-			owner: remote.owner,
-			repo: remote.repositoryName,
-			issue_number: this.number,
-			labels,
-		});
-	}
-
-	async removeLabel(label: string): Promise<void> {
-		const { octokit, remote } = await this.githubRepository.ensure();
-		await octokit.issues.removeLabel({
-			owner: remote.owner,
-			repo: remote.repositoryName,
-			issue_number: this.number,
-			name: label,
-		});
-	}
-
-	async getIssueTimelineEvents(): Promise<TimelineEvent[]> {
-		Logger.debug(`Fetch timeline events of issue #${this.number} - enter`, IssueModel.ID);
-		const githubRepository = this.githubRepository;
-		const { query, remote, schema } = await githubRepository.ensure();
-
-		try {
-			const { data } = await query<TimelineEventsResponse>({
-				query: schema.IssueTimelineEvents,
-				variables: {
-					owner: remote.owner,
-					name: remote.repositoryName,
-					number: this.number,
-				},
-			});
-			const ret = data.repository.pullRequest.timelineItems.nodes;
-			const events = parseGraphQLTimelineEvents(ret, githubRepository);
-
-			return events;
-		} catch (e) {
-			console.log(e);
-			return [];
-		}
-	}
-
-
 }

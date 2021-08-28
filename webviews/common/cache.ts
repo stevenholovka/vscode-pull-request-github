@@ -3,25 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { TimelineEvent } from '../../src/common/timelineEvent';
-import {
-	GithubItemStateEnum,
-	IAccount,
-	ILabel,
-	IMilestone,
-	MergeMethod,
-	MergeMethodsAvailability,
-	PullRequestChecks,
-	PullRequestMergeability,
-	ReviewState,
-} from '../../src/github/interface';
 import { vscode } from './message';
-
-export enum ReviewType {
-	Comment = 'comment',
-	Approve = 'approve',
-	RequestChanges = 'requestChanges',
-}
+import { GithubItemStateEnum, IAccount, ReviewState, ILabel, MergeMethod, MergeMethodsAvailability, PullRequestMergeability } from '../src/github/interface';
+import { TimelineEvent } from '../src/common/timelineEvent';
+import { ReposGetCombinedStatusForRefResponse } from '@octokit/rest';
 
 export interface PullRequest {
 	number: number;
@@ -34,15 +19,10 @@ export interface PullRequest {
 	state: GithubItemStateEnum;
 	events: TimelineEvent[];
 	isCurrentlyCheckedOut: boolean;
-	isRemoteBaseDeleted?: boolean;
 	base: string;
-	isRemoteHeadDeleted?: boolean;
-	isLocalHeadDeleted?: boolean;
 	head: string;
 	labels: ILabel[];
-	assignees: IAccount[];
 	commitsCount: number;
-	milestone: IMilestone;
 	repositoryDefaultBranch: any;
 	/**
 	 * User can edit PR title and description (author or user with push access)
@@ -54,18 +34,14 @@ export interface PullRequest {
 	 */
 	hasWritePermission: boolean;
 	pendingCommentText?: string;
-	pendingCommentDrafts?: { [key: string]: string };
-	pendingReviewType?: ReviewType;
-	status: PullRequestChecks;
+	pendingCommentDrafts?: { [key: string]: string; };
+	status: ReposGetCombinedStatusForRefResponse;
 	mergeable: PullRequestMergeability;
 	defaultMergeMethod: MergeMethod;
 	mergeMethodsAvailability: MergeMethodsAvailability;
 	reviewers: ReviewState[];
 	isDraft?: boolean;
 	isIssue: boolean;
-	isAuthor?: boolean;
-	continueOnGitHub: boolean;
-	currentUserReviewState: string;
 }
 
 export function getState(): PullRequest {
@@ -75,13 +51,12 @@ export function getState(): PullRequest {
 export function setState(pullRequest: PullRequest): void {
 	const oldPullRequest = getState();
 
-	if (oldPullRequest && oldPullRequest.number && oldPullRequest.number === pullRequest.number) {
+	if (oldPullRequest &&
+		oldPullRequest.number && oldPullRequest.number === pullRequest.number) {
 		pullRequest.pendingCommentText = oldPullRequest.pendingCommentText;
 	}
 
-	if (pullRequest) {
-		vscode.setState(pullRequest);
-	}
+	if (pullRequest) { vscode.setState(pullRequest); }
 }
 
 export function updateState(data: Partial<PullRequest>): void {
